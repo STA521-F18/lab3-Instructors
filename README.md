@@ -1,3 +1,5 @@
+[![wercker status](https://app.wercker.com/status/40049d754fac571a0d4b5b8a3102eef7/s/master "wercker status")](https://app.wercker.com/project/byKey/40049d754fac571a0d4b5b8a3102eef7)
+
 # Lab3
 
 Topics:
