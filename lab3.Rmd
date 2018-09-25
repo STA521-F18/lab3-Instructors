@@ -3,8 +3,9 @@ title: "Lab 3"
 author: "update with team name"
 date: "fill in date"
 output:
-  html_document: default
+  pdf_document: default
   html_notebook: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -31,6 +32,8 @@ The lab material is based on [Chapter 4 Lab from ISLR](http://www-bcf.usc.edu/~g
 
 ```{r}
 library(ISLR)
+library(dplyr)
+library(magrittr)
 names(Smarket)
 dim(Smarket)
 summary(Smarket)
@@ -46,6 +49,13 @@ Let's look at the correlations between these variables. Note the `cor` only work
 ```{r}
 try(cor(Smarket))[1]
 cor(Smarket[,-9])
+```
+
+Alternatively we can do this using dplyr, where we can explicitly select only those variables that are numerical.
+
+```{r}
+dplyr::select_if(Smarket, is.numeric) %>%
+  cor
 ```
 
 ```{r}
@@ -73,6 +83,26 @@ table(glm.pred,Direction)
 mean(glm.pred==Direction)
 ```
 
+In terms of assessing model fit, we can look at quantities like the misclassification error as above, but this can also be done in dplyr as an alternative to base \texttt{R}. 
+
+```{r}
+# Create the predictions #
+glm.pred.summary <- 
+  data.frame(probability = predict(glm.fits, type = "response")) %>%
+  dplyr::mutate(prediction  = dplyr::if_else(probability > 0.5, "Up", "Down"))
+# Create a table of these #
+glm.pred.summary %>%
+  dplyr::pull(prediction) %>%
+  table(., Direction)
+# We can also compute the misclassification rate this way #
+glm.pred.summary %>%
+  dplyr::mutate(evaluation = prediction == Direction)%>%
+  dplyr::pull(evaluation) %>%
+  mean
+```
+\textbf{Important Remark:} There is a distinction between using \texttt{pull} and \texttt{select} -- the former is for single variables and returns a vector while the output of the latter is always a data frame.
+
+
 Split the dataset into training set and testing set and see how well is the out-of-sample classification. The classification error in the testing set is 0.52, which is above 0.5. This means that the out-of-sample prediction is terrible.
 ```{r}
 train=(Year<2005) # training set
@@ -87,5 +117,43 @@ table(glm.pred,Direction.2005)
 mean(glm.pred==Direction.2005)
 mean(glm.pred!=Direction.2005)
 ```
+The dplyr analog to this example is as follows.
+
+```{r}
+# Create the testing and training sets #
+train <- Smarket %>%
+  dplyr::filter(Year < 2005)
+test <- Smarket %>%
+  dplyr::filter(Year >= 2005)
+# Estimate the model #
+glm.fits=glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume,
+             data=train,
+             family=binomial(link = "logit"))
+# Generate the predictions using the testing data #
+test %<>%
+  mutate(probability = predict(glm.fits, 
+                                   type = "response",
+                                   newdata = test),
+         prediction  = dplyr::if_else(probability > 0.5, "Up", "Down"))
+# Create a table of these
+table(pull(test, prediction), pull(test, Direction))
+# Compute some misclassification rates
+test %>%
+  dplyr::mutate(value = Direction == prediction) %>%
+  dplyr::pull(value) %>%
+  mean
+
+test %>%
+  dplyr::mutate(value = Direction != prediction) %>%
+  dplyr::pull(value) %>%
+  mean
+```
+
+
 
 Maybe simplifying the model will help. Try fitting the model with only `Lag1` and `Lag2` on the training set, and then print a contingency table of observations vs. predictions. What is the classification error?
+
+\textbf{Important Remark:}
+Notice that we can replicate a lot of the data manipulation steps in base R using the functionality of dplyr. This improves readability and also ensures that your results are reproducible. However, this does not mean that dplyr is always a good idea. In larger datasets sometimes data manipulation by way of dplyr is slower than base R operations. 
+
+In addition a number of students have noticed that we drew the decision boundary at 0.5 -- for predicted probabilities larger than 0.5, we assigned a 1 and assigned a 0 otherwise. However, this might not be optimal. For binary classifiers like logistic regression, a better strategy is to use an Receiver Operator Charactertistic (ROC) curve.
